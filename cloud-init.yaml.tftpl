@@ -1,0 +1,27 @@
+#cloud-config
+package_update: true
+packages:
+  - python3
+  - curl
+  - netcat-openbsd
+write_files:
+  - path: /srv/lab/index.html
+    permissions: '0644'
+    content: |
+      Hello from ${node_name} - built by Terraform
+  - path: /etc/systemd/system/lab-http.service
+    permissions: '0644'
+    content: |
+      [Unit]
+      Description=Terraform Lab HTTP
+      After=network.target
+      [Service]
+      User=nobody
+      WorkingDirectory=/srv/lab
+      ExecStart=/usr/bin/python3 -m http.server 8080 --bind 0.0.0.0
+      Restart=on-failure
+      [Install]
+      WantedBy=multi-user.target
+runcmd:
+  - [systemctl, daemon-reload]
+  - [sh, -c, 'if [ "${node_name}" = "vm02" ]; then systemctl enable --now lab-http; fi']
