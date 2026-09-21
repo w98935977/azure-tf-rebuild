@@ -42,8 +42,9 @@
 | 部署後無變更 plan | PASS：`No changes. Your infrastructure matches the configuration.`，exit code `0` |
 | Terraform destroy | PASS：`Destroy complete! Resources: 20 destroyed.` |
 | Azure RG 清除 | PASS：`az group exists --name $rg` 回傳 `false` |
+| 清除後 Terraform state | PASS：`terraform state list` 沒有列出任何資源 |
 
-部署時的 `Apply complete!` 輸出未留存；部署結果由後續實際登入、服務測試與 refreshed plan 佐證。清除後的 `terraform state list` 尚未留存輸出，因此未列為已驗證項目。
+部署時的 `Apply complete!` 輸出未留存；部署結果由後續實際登入、服務測試與 refreshed plan 佐證。清除後 `terraform state list` 沒有列出任何資源，與 Azure RG 不存在的檢查結果一致。
 
 ### 關鍵輸出
 
