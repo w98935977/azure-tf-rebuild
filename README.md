@@ -13,19 +13,65 @@
 - `create_compute = false` 預設僅部署網路；需要驗證時再建立 VM。
 - 使用獨立 RG 與 local state，不匯入或刪除原本手動建立的 Azure 環境。
 
-## 驗證狀態
+## 實機驗證
 
-| 項目 | 狀態 |
+本次已在 Azure East Asia 完成部署、服務與網路驗證，再以 Terraform 清除 Lab。以下結果整理自實際 PowerShell／SSH 輸出。
+
+| 驗證環境 | 紀錄 |
 |---|---|
-| Terraform 格式檢查 | PASS（文件整理環境執行） |
-| Terraform validate | 本環境 provider cache 與 lock checksum 不符，未完成 |
-| Azure plan / apply | 待補實測紀錄 |
-| cloud-init / systemd 啟動 | 待補實測紀錄 |
-| VM01 → VM02 TCP/8080 | 待補實測紀錄 |
-| 外部 → VM02 TCP/8080 拒絕 | 待補實測紀錄 |
-| Terraform destroy 與 RG 清除 | 待補實測紀錄 |
+| 日期 | 2026-09-22（台灣時間；版本紀錄時間 00:07 +08:00） |
+| 受測 commit | `3b7f2b3` |
+| 執行端 | Windows AMD64／PowerShell |
+| Terraform | `1.16.3` |
+| AzureRM provider | `4.81.0` |
+| Resource Group | `rg-tommy-tf-rebuild` |
 
-此表區分程式碼設計與實際執行結果。完整驗證步驟見 [驗證與排障](docs/validation.md)。
+| 驗證項目 | 結果與證據 |
+|---|---|
+| Provider 初始化 | PASS：`Terraform has been successfully initialized!` |
+| Terraform 格式檢查 | PASS：`terraform fmt -check`，exit code `0` |
+| Terraform validate | PASS：`Success! The configuration is valid.`，exit code `0` |
+| Azure 部署 | 完成：操作者確認 apply 成功；後續兩台 VM 的 SSH 與服務測試成功 |
+| 管理端 → 兩台 VM TCP/22 | PASS：兩台 `TcpTestSucceeded : True`，SSH 金鑰登入成功 |
+| 兩台 VM cloud-init | PASS：皆回傳 `status: done` |
+| VM02 systemd 服務 | PASS：`systemctl is-active lab-http` 回傳 `active` |
+| VM02 HTTP listener | PASS：Python 監聽 `0.0.0.0:8080` |
+| VM02 本機 HTTP | PASS：回傳 `Hello from vm02 - built by Terraform` |
+| VM01 → VM02 私有 IP TCP/8080 | PASS：回傳預期頁面，curl exit code `0` |
+| Windows → VM02 Public IP TCP/8080 | PASS：連線逾時，curl exit code `28` |
+| 部署後無變更 plan | PASS：`No changes. Your infrastructure matches the configuration.`，exit code `0` |
+| Terraform destroy | PASS：`Destroy complete! Resources: 20 destroyed.` |
+| Azure RG 清除 | PASS：`az group exists --name $rg` 回傳 `false` |
+
+部署時的 `Apply complete!` 輸出未留存；部署結果由後續實際登入、服務測試與 refreshed plan 佐證。清除後的 `terraform state list` 尚未留存輸出，因此未列為已驗證項目。
+
+### 關鍵輸出
+
+以下保留實際測試的關鍵內容；Public IP 以變數表示，不刊登 subscription ID。
+
+從 VM01 經私有網路連到 VM02：
+
+```powershell
+ssh -i ~/.ssh/azure-tf-lab azureuser@"$VM01_PUBLIC" "curl --connect-timeout 5 --max-time 10 -fsS http://10.20.2.4:8080"
+# Hello from vm02 - built by Terraform
+$LASTEXITCODE
+# 0
+```
+
+從 Windows 管理端連到 VM02 的 Public IP：
+
+```powershell
+curl.exe --connect-timeout 5 --max-time 10 "http://${VM02_PUBLIC}:8080"
+# curl: (28) Connection timed out after 5014 milliseconds
+$LASTEXITCODE
+# 28
+```
+
+內部 HTTP 成功與外部連線失敗，符合本次存取設計；timeout 本身不能單獨證明命中哪一條 NSG 規則。本次未測試第三台 VNet client，也未驗證非管理來源的 SSH 拒絕。
+
+`No changes` 表示 Terraform 刷新後未發現受管理屬性與設定的差異，不代表已檢查 VM 內所有檔案或設定。
+
+完整重現步驟與排障方式見 [驗證與排障](docs/validation.md)。
 
 ## 需求
 
